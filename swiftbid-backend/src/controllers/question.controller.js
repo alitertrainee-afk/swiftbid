@@ -112,3 +112,58 @@ export const getQuestionsByEvent = async (req, res) => {
     });
   }
 };
+
+export const upvoteQuestion = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+
+    // 1️⃣ Validate presence
+    if (!questionId) {
+      return res.status(400).json({
+        success: false,
+        message: "questionId parameter is required",
+      });
+    }
+
+    // 2️⃣ Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(questionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid questionId format",
+      });
+    }
+
+    // 3️⃣ Atomic increment
+    const updatedQuestion = await Question.findByIdAndUpdate(
+      questionId,
+      { $inc: { upvotes: 1 } }, // 🔥 Atomic operation
+      {
+        new: true, // Return updated document
+        runValidators: true, // Enforce schema rules
+      },
+    ).lean(); // Lean for performance
+
+    if (!updatedQuestion) {
+      return res.status(404).json({
+        success: false,
+        message: "Question not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Upvote recorded",
+      data: {
+        _id: updatedQuestion._id,
+        upvotes: updatedQuestion.upvotes,
+      },
+    });
+  } catch (error) {
+    console.error("Upvote Question Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while upvoting question",
+    });
+  }
+};

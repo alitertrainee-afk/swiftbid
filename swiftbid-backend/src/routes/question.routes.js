@@ -5,6 +5,7 @@ import express from "express";
 import {
   createQuestion,
   getQuestionsByEvent,
+  upvoteQuestion,
 } from "../controllers/question.controller.js";
 
 // initialize router
@@ -15,5 +16,8 @@ router.post("/", createQuestion);
 
 // get all questions for an event
 router.get("/:eventId", getQuestionsByEvent);
+
+// upvote a question
+router.put("/:questionId/upvote", upvoteQuestion);
 
 export default router;
