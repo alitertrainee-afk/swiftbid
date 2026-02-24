@@ -25,7 +25,6 @@ export const createEvent = async (req, res) => {
       data: event,
     });
   } catch (error) {
-
     if (error.name === "ValidationError") {
       return res.status(400).json({
         success: false,
@@ -46,6 +45,51 @@ export const createEvent = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while creating event",
+    });
+  }
+};
+
+export const getEventByJoinCode = async (req, res) => {
+  try {
+    const { joinCode } = req.params;
+
+    if (!joinCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Join code parameter is required",
+      });
+    }
+
+    // Normalize input to match schema behavior
+    const normalizedCode = joinCode.trim().toUpperCase();
+
+    const event = await Event.findOne({ joinCode: normalizedCode });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    if (!event.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "This event is closed",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Event found",
+      data: event,
+    });
+  } catch (error) {
+    console.error("Get Event By Join Code Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching event",
     });
   }
 };

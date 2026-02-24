@@ -2,12 +2,18 @@
 import express from "express";
 
 // controllers import
-import { createEvent } from "../controllers/event.controller.js";
+import {
+  createEvent,
+  getEventByJoinCode,
+} from "../controllers/event.controller.js";
 
 // initialize router
 const router = express.Router();
 
 // create an event
 router.post("/", createEvent);
+
+// get an event by join code
+router.get("/:joinCode", getEventByJoinCode);
 
 export default router;
