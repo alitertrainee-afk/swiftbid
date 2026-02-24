@@ -1,6 +1,12 @@
 // models import
 import Event from "../models/Event.js";
 
+// redis import
+import redisClient from "../config/redisClient.js";
+
+// Cache TTL in seconds
+const EVENT_CACHE_TTL = 60;
+
 export const createEvent = async (req, res) => {
   try {
     const { title, joinCode, isActive } = req.body;
@@ -63,6 +69,22 @@ export const getEventByJoinCode = async (req, res) => {
     // Normalize input to match schema behavior
     const normalizedCode = joinCode.trim().toUpperCase();
 
+    // 1️⃣ Check Redis cache first
+    const cacheKey = `event:${normalizedCode}`;
+    const cachedEvent = await redisClient.get(cacheKey);
+
+    if (cachedEvent) {
+      // 🎯 Cache Hit — skip MongoDB entirely
+      const event = JSON.parse(cachedEvent);
+
+      return res.status(200).json({
+        success: true,
+        message: "Event found (cached)",
+        data: event,
+      });
+    }
+
+    // 2️⃣ Cache Miss — query MongoDB
     const event = await Event.findOne({ joinCode: normalizedCode });
 
     if (!event) {
@@ -78,6 +100,9 @@ export const getEventByJoinCode = async (req, res) => {
         message: "This event is closed",
       });
     }
+
+    // 3️⃣ Store in Redis with a 60-second TTL
+    await redisClient.setEx(cacheKey, EVENT_CACHE_TTL, JSON.stringify(event));
 
     return res.status(200).json({
       success: true,
