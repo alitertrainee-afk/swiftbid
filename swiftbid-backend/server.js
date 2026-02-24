@@ -28,6 +28,12 @@ const io = new Server(httpServer, {
 io.on("connection", (socket) => {
   console.log(`⚡ Client connected: ${socket.id}`);
 
+  // Join a room scoped to a specific event
+  socket.on("joinEvent", (eventId) => {
+    socket.join(eventId);
+    console.log(`🚪 Socket ${socket.id} joined room: ${eventId}`);
+  });
+
   socket.on("disconnect", () => {
     console.log(`❌ Client disconnected: ${socket.id}`);
   });

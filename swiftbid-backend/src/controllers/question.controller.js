@@ -5,6 +5,9 @@ import mongoose from "mongoose";
 import Question from "../models/Question.js";
 import Event from "../models/Event.js";
 
+// socket.io instance
+import { io } from "../../server.js";
+
 export const createQuestion = async (req, res) => {
   try {
     const { eventId, text } = req.body;
@@ -48,6 +51,9 @@ export const createQuestion = async (req, res) => {
       eventId,
       text,
     });
+
+    // 6️⃣ Broadcast to all clients in this event's room
+    io.to(eventId).emit("newQuestion", question);
 
     return res.status(201).json({
       success: true,
