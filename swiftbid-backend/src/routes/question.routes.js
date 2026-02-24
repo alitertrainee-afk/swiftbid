@@ -18,6 +18,6 @@ router.post("/", createQuestion);
 router.get("/:eventId", getQuestionsByEvent);
 
 // upvote a question
-router.put("/:questionId/upvote", upvoteQuestion);
+router.patch("/:questionId/upvote", upvoteQuestion);
 
 export default router;
