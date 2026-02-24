@@ -1,50 +1,81 @@
-// express app
-import app from "./src/app.js";
-
-// libs import
+import cluster from "cluster";
+import os from "os";
 import dotenv from "dotenv";
-import { createServer } from "http";
-import { Server } from "socket.io";
-
-// configs import
-import connectDB from "./src/config/database.js";
 
 dotenv.config();
 
-const PORT = process.env.PORT;
+// Variable to hold the io instance (only defined in workers)
+let io;
 
-// 1️⃣ Create an explicit HTTP server from the Express app
-const httpServer = createServer(app);
+if (cluster.isPrimary) {
+  /**
+   * 🧠 PRIMARY PROCESS — The Traffic Cop
+   *
+   * This process does NOT handle any HTTP or WebSocket traffic.
+   * It forks one worker per CPU core and monitors them.
+   */
+  const numCPUs = os.cpus().length;
 
-// 2️⃣ Attach Socket.io to the HTTP server with CORS config
-const io = new Server(httpServer, {
-  cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
-  },
-});
+  console.log(`🧠 Primary process ${process.pid} is running`);
+  console.log(`🔀 Forking ${numCPUs} workers...`);
 
-// 3️⃣ Listen for new WebSocket connections
-io.on("connection", (socket) => {
-  console.log(`⚡ Client connected: ${socket.id}`);
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
 
-  // Join a room scoped to a specific event
-  socket.on("joinEvent", (eventId) => {
-    socket.join(eventId);
-    console.log(`🚪 Socket ${socket.id} joined room: ${eventId}`);
+  // If a worker dies, log it and spin up a replacement
+  cluster.on("exit", (worker, code, signal) => {
+    console.log(
+      `💀 Worker ${worker.process.pid} died (code: ${code}, signal: ${signal}). Restarting...`,
+    );
+    cluster.fork();
+  });
+} else {
+  /**
+   * ⚙️ WORKER PROCESS — Handles actual traffic
+   *
+   * Each worker gets its own HTTP server, Socket.io instance, and DB connection.
+   */
+  const { default: app } = await import("./src/app.js");
+  const { createServer } = await import("http");
+  const { Server } = await import("socket.io");
+  const { default: connectDB } = await import("./src/config/database.js");
+
+  const PORT = process.env.PORT;
+
+  // 1️⃣ Create an explicit HTTP server from the Express app
+  const httpServer = createServer(app);
+
+  // 2️⃣ Attach Socket.io to the HTTP server with CORS config
+  io = new Server(httpServer, {
+    cors: {
+      origin: "http://localhost:3000",
+      methods: ["GET", "POST"],
+    },
   });
 
-  socket.on("disconnect", () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-  });
-});
+  // 3️⃣ Listen for new WebSocket connections
+  io.on("connection", (socket) => {
+    console.log(`⚡ Client connected: ${socket.id} (Worker ${process.pid})`);
 
-// 4️⃣ Connect to DB, then start the HTTP server (not app.listen)
-connectDB().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    // Join a room scoped to a specific event
+    socket.on("joinEvent", (eventId) => {
+      socket.join(eventId);
+      console.log(`🚪 Socket ${socket.id} joined room: ${eventId}`);
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`❌ Client disconnected: ${socket.id}`);
+    });
   });
-});
+
+  // 4️⃣ Connect to DB, then start the HTTP server
+  connectDB().then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`⚙️ Worker ${process.pid} is running on port ${PORT}`);
+    });
+  });
+}
 
 // Export io so other modules can emit events
 export { io };

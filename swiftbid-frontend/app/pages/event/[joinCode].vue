@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from "#imports";
+import { computed, ref, watchEffect, onUnmounted } from "#imports";
+import { io as socketIO } from "socket.io-client";
 
 const route = useRoute();
 const config = useRuntimeConfig();
@@ -68,8 +69,7 @@ async function submitQuestion() {
     // Clear input after successful submission
     newQuestionText.value = "";
 
-    // Refresh the questions list so the new question appears immediately
-    await refreshQuestions();
+    // No need to refreshQuestions — the socket "newQuestion" event handles it!
   } catch (err) {
     submitError.value =
       err.data?.message || "Something went wrong. Please try again.";
@@ -100,6 +100,35 @@ async function upvoteQuestion(questionId) {
     question.upvotes--;
   }
 }
+
+/**
+ * 5️⃣ Real-Time Socket Connection
+ */
+const socket = socketIO(config.public.apiBase);
+
+// Join the event room once we have the eventId
+watchEffect(() => {
+  if (event.value?._id) {
+    socket.emit("joinEvent", event.value._id);
+  }
+});
+
+// Listen for new questions broadcast by the server
+socket.on("newQuestion", (question) => {
+  const list = questionsResponse.value?.data;
+  if (!list) return;
+
+  // Avoid duplicates (e.g., the submitter already sees their own question)
+  const exists = list.some((q) => q._id === question._id);
+  if (!exists) {
+    list.push(question);
+  }
+});
+
+// Clean up on page leave to prevent memory leaks
+onUnmounted(() => {
+  socket.disconnect();
+});
 </script>
 <template>
   <div class="container">
