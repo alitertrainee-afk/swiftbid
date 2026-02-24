@@ -40,6 +40,8 @@ if (cluster.isPrimary) {
   const { createServer } = await import("http");
   const { Server } = await import("socket.io");
   const { default: connectDB } = await import("./src/config/database.js");
+  const { createClient } = await import("redis");
+  const { createAdapter } = await import("@socket.io/redis-adapter");
 
   const PORT = process.env.PORT;
 
@@ -54,7 +56,16 @@ if (cluster.isPrimary) {
     },
   });
 
-  // 3️⃣ Listen for new WebSocket connections
+  // 3️⃣ Connect Redis Pub/Sub adapter for cross-worker broadcasting
+  const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+  const pubClient = createClient({ url: REDIS_URL });
+  const subClient = pubClient.duplicate();
+
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log(`🔴 Redis adapter connected (Worker ${process.pid})`);
+
+  // 4️⃣ Listen for new WebSocket connections
   io.on("connection", (socket) => {
     console.log(`⚡ Client connected: ${socket.id} (Worker ${process.pid})`);
 
@@ -69,7 +80,7 @@ if (cluster.isPrimary) {
     });
   });
 
-  // 4️⃣ Connect to DB, then start the HTTP server
+  // 5️⃣ Connect to DB, then start the HTTP server
   connectDB().then(() => {
     httpServer.listen(PORT, () => {
       console.log(`⚙️ Worker ${process.pid} is running on port ${PORT}`);
